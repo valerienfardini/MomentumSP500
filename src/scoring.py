@@ -1,34 +1,56 @@
 import numpy as np
 import pandas as pd
 
-def prep_percentiles(df: pd.DataFrame) -> pd.DataFrame:
+def prep_percentiles(df : pd.DataFrame):
     out = df.copy()
-    out["CAGR_pct"]             = out["CAGR"].rank(pct=True, ascending=True)
-    out["sharpe_ratio_pct"]     = out["sharpe_ratio"].rank(pct=True, ascending=True)
-    out["calmar_pct"]           = out["calmar"].rank(pct=True, ascending=True)
-    out["annual_volatility_pct"]= 1 - out["annual_volatility"].rank(pct=True, ascending=True)
-    out["max_drawdown_pct"]     = 1 - out["max_drawdown"].abs().rank(pct=True, ascending=True)
+    out["CAGR_pct"] = out["CAGR"].rank(pct=True, ascending=True)
+    out["sharpe_ratio_pct"] = out["sharpe_ratio"].rank(pct=True, ascending=True)
+    out["calmar_pct"] = out["calmar"].rank(pct=True, ascending=True)
+    out["annual_volatility_pct"] = 1 - out["annual_volatility"].rank(pct=True, ascending=True)
+    mdd_mag = out["max_drawdown"].abs()
+    out["max_drawdown_pct"] = 1 - mdd_mag.rank(pct=True, ascending=True)
+    out = out.drop(columns=["CAGR", "sharpe_ratio","calmar","annual_volatility", "max_drawdown"])
     return out
 
-def add_composite_score(df_pct: pd.DataFrame, global_weights: dict,
-                        cols_pct=None, score_col="CompositeScore") -> pd.DataFrame:
-    if cols_pct is None:
-        cols_pct = ["CAGR_pct","sharpe_ratio_pct","calmar_pct","annual_volatility_pct","max_drawdown_pct"]
-    cols = [c for c in cols_pct if c in df_pct.columns and c in global_weights]
-    if not cols:
-        raise ValueError("Aucune colonne percentile utilisable.")
-    X = df_pct[cols].to_numpy(dtype=float)
-    W = np.array([global_weights[c] for c in cols], dtype=float)
-    out = df_pct.copy()
-    out[score_col] = X @ W
-    return out
 
-def add_bucket_column(df: pd.DataFrame, buckets: dict) -> pd.DataFrame:
-    L2B = {L: b for b, Ls in buckets.items() for L in Ls}
-    out = df.copy()
-    out["Bucket"] = out["lookback"].map(L2B)
-    return out
+def pareto_front(df_pct: pd.DataFrame, cols_pct) -> pd.DataFrame:
+    Z = df_pct[cols_pct].to_numpy()
+    n = len(df_pct)
+    is_dom = np.zeros(n, dtype=bool)
+    for i in range(n):
+        dominates_i = (Z >= Z[i]).all(axis=1) & (Z > Z[i]).any(axis=1)
+        if dominates_i.any():
+            is_dom[i] = True
+    return df_pct.loc[~is_dom].copy()
 
-def select_best_per_bucket(df_scored: pd.DataFrame, score_col="CompositeScore"):
-    idx = df_scored.groupby("Bucket", observed=True)[score_col].idxmax()
-    return df_scored.loc[idx].sort_values("Bucket")
+def add_composite_per_bucket(df: pd.DataFrame, weights_map: dict,  cols_pct: list) -> pd.DataFrame:
+    s = df.copy()
+    s["Composite Score"] = np.nan
+    for bkt, part in s.groupby(level=0, sort=False, observed=True):
+        wdict = weights_map[bkt]
+        cols = [c for c in cols_pct if c in part.columns and c in wdict]
+        X = part[cols].to_numpy(dtype=float)
+        W = np.array([wdict[c] for c in cols], dtype=float)
+        scores = X @ W
+        s.loc[part.index, "Composite Score"] = scores
+
+    return s
+
+def select_best_per_bucket(df: pd.DataFrame):
+    idx = df.groupby(level="Bucket", observed=True)["Composite Score"].idxmax()
+    best = df.loc[idx]
+    best = best.drop(columns = cols_pct)
+    return best
+def metrics_from_series(r: pd.Series) -> dict:
+    r = r.dropna()
+    n = len(r)
+    if n == 0:
+        return {"CAGR": np.nan, "Sharpe": np.nan, "Calmar": np.nan, "Vol": np.nan, "MDD": np.nan}
+    cagr = (1 + r).prod()**(12/n) - 1
+    volm = r.std(ddof=1)
+    volA = volm * np.sqrt(12) if n > 1 else np.nan
+    sharpe = (r.mean()/volm) * np.sqrt(12) if volm > 0 else np.nan
+    cum = (1 + r).cumprod()
+    mdd = (cum / cum.cummax() - 1).min()
+    calmar = cagr / abs(mdd) if pd.notna(mdd) and mdd < 0 else np.nan
+    return {"CAGR": cagr, "Sharpe": sharpe,  "Calmar": calmar, "Vol": volA,  "MDD": mdd} 
