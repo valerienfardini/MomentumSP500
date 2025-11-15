@@ -3,6 +3,11 @@ import pandas as pd
 
 import matplotlib.pyplot as plt
 
+# Compute log-returns and plot the cumulative performance of the strategy
+rets = np.log(final_df2/final_df2.shift(1))
+rets.cumsum().apply(np.exp).plot(figsize=(30,30))
+
+# Plot a comparison of the strategy vs. the S&P 500 using CAGR and Sharpe ratio
 mom = metrics_df2["CAGR_pct"]
 spy = metrics_spy["CAGR_pct"]
 mom_s = metrics_df2["sharpe_ratio_pct"]
