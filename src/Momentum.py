@@ -1,6 +1,5 @@
 import numpy as np
 import pandas as pd
-from .metrics import perf_metrics
 
 returns = final_df2.pct_change() 
 
