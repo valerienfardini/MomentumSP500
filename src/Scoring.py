@@ -12,7 +12,6 @@ def prep_percentiles(df : pd.DataFrame):
     out = out.drop(columns=["CAGR", "sharpe_ratio","calmar","annual_volatility", "max_drawdown"])
     return out
 
-
 def pareto_front(df_pct: pd.DataFrame, cols_pct) -> pd.DataFrame:
     Z = df_pct[cols_pct].to_numpy()
     n = len(df_pct)
@@ -22,10 +21,10 @@ def pareto_front(df_pct: pd.DataFrame, cols_pct) -> pd.DataFrame:
         if dominates_i.any():
             is_dom[i] = True
     return df_pct.loc[~is_dom].copy()
-
 def add_composite_per_bucket(df: pd.DataFrame, weights_map: dict,  cols_pct: list) -> pd.DataFrame:
     s = df.copy()
     s["Composite Score"] = np.nan
+
     for bkt, part in s.groupby(level=0, sort=False, observed=True):
         wdict = weights_map[bkt]
         cols = [c for c in cols_pct if c in part.columns and c in wdict]
@@ -40,17 +39,4 @@ def select_best_per_bucket(df: pd.DataFrame):
     idx = df.groupby(level="Bucket", observed=True)["Composite Score"].idxmax()
     best = df.loc[idx]
     best = best.drop(columns = cols_pct)
-    return best
-def metrics_from_series(r: pd.Series) -> dict:
-    r = r.dropna()
-    n = len(r)
-    if n == 0:
-        return {"CAGR": np.nan, "Sharpe": np.nan, "Calmar": np.nan, "Vol": np.nan, "MDD": np.nan}
-    cagr = (1 + r).prod()**(12/n) - 1
-    volm = r.std(ddof=1)
-    volA = volm * np.sqrt(12) if n > 1 else np.nan
-    sharpe = (r.mean()/volm) * np.sqrt(12) if volm > 0 else np.nan
-    cum = (1 + r).cumprod()
-    mdd = (cum / cum.cummax() - 1).min()
-    calmar = cagr / abs(mdd) if pd.notna(mdd) and mdd < 0 else np.nan
-    return {"CAGR": cagr, "Sharpe": sharpe,  "Calmar": calmar, "Vol": volA,  "MDD": mdd} 
+    return best 
