@@ -1,5 +1,6 @@
 import requests
 
+#download the data and create the csv files
 API_KEY = "XXXXXXXXXXXXXXXXXXXXXXXXXXXX" #insert your tingo key
 
 tickers = ["NVDA", "MSFT", "AAPL", "AMZN", "META", "AVGO", "GOOG", "GOOGL", "BRK-B", "TSLA", "JPM", "WMT", "V", "LLY", "ORCL", "NFLX", "MA", "XOM", "COST","PG", "JNJ", "HD", "BAC", "ABBV", "PLTR", "KO", "UNH", "PM", "CSCO", "TMUS", "IBM", "WFC", "GE", "CRM", "CVX", "ABT", "MS", "AXP", "LIN", "DIS",
@@ -66,3 +67,17 @@ for ticker in tickers:
 final_df1 = pd.concat(all_data1.values(), ignore_index=True)
 final_df1.to_csv("SP500_Tiingo_Monthly2.csv", index=False)
 print("Fichier CSV enregistré sous : SP500_Tiingo_Monthly2.csv")
+
+#cleaning the data
+final_df = final_df.drop(['close', 'high', 'low', 'open', 'volume', 'adjHigh', 'adjLow', 'adjVolume', 'adjOpen', 'divCash', 'splitFactor'], axis = 1)
+final_df1 = final_df1.drop(['close', 'high', 'low', 'open', 'volume', 'adjHigh', 'adjLow', 'adjVolume', 'adjOpen', 'divCash', 'splitFactor'], axis = 1)
+
+final_df2 = pd.concat([final_df, final_df1])
+final_df2 = final_df2.pivot(index = 'date', columns = 'ticker', values = 'adjClose')
+final_df2.index = pd.to_datetime(final_df2.index).strftime('%Y-%m-%d')
+
+columns_delete = final_df2.columns[final_df2.isna().sum() > 1]
+
+#Save the final file
+final_df2.to_csv("S&P500_Tingo_Monthly3.csv", index=True, index_label="date")
+print("fichier csv enregistré sous : S&P500_Tingo_Monthly83.csv")
