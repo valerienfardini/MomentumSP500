@@ -25,3 +25,25 @@ def backtest_with_horizon(prices: pd.DataFrame, returns: pd.DataFrame, lookback:
                        "calmar": calmar, 
                        "annual_volatility": vol_a, 
                        "max_drawdown": mdd }
+
+def mom_spy(spy: pd.DataFrame, lookback: int):
+    px = spy["SPY"].sort_index()              
+    ret = px.pct_change()                     
+    sig = px.pct_change(lookback).shift(1)    
+    pos = (sig > 0).astype(float)             
+
+    port = (pos * ret).dropna()               
+    n = len(port)
+    cum = (1 + port).cumprod()
+
+    cagr = (1 + port).prod()**(12/n) - 1 if n else np.nan
+    vol  = port.std(ddof=1)
+    vol_a = vol * np.sqrt(12) if n > 1 else np.nan
+    sharpe = (port.mean()/vol)*np.sqrt(12) if pd.notna(vol) and vol > 0 else np.nan
+    mdd = (cum / cum.cummax() - 1).min() if n else np.nan
+    calmar = cagr / abs(mdd) if pd.notna(mdd) and mdd < 0 else np.nan
+
+    return port, cum, {
+        "lookback": lookback, "quantile" : np.nan, "CAGR": cagr, "sharpe_ratio": sharpe,
+        "calmar": calmar, "annual_volatility": vol_a, "max_drawdown": mdd
+    }
